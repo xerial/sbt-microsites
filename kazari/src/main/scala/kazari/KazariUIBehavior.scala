@@ -133,6 +133,7 @@ object KazariUIBehavior {
 
       sendEvaluatorRequest(evalClient, codeSnippet()).onComplete {
         case Success(r) => {
+          println("Success")
           changeButtonIcon(btnSelector + " " + "i",
                            decoratorButtonSpinnerClass,
                            decoratorButtonPlayClass)
@@ -161,9 +162,11 @@ object KazariUIBehavior {
           onSuccess(r)
         }
         case Failure(e) => {
+          println("Failure")
           changeButtonIcon(btnSelector + " " + "i",
                            decoratorButtonSpinnerClass,
                            decoratorButtonPlayClass)
+          $(btnSelector).removeClass(compilingKazariClass).addClass(compilerKazariColorClass)
           toggleButtonActiveState(btnSelector, false)
           showAlertMessage(parentSelector,
                            "Error while connecting to the remote evaluator.",
