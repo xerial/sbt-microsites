@@ -38,6 +38,8 @@ trait MicrositeKeys {
   val publishMicrosite =
     taskKey[Unit]("Publish the microsite (using the pushSite task) after build it")
   val microsite = taskKey[Seq[File]]("Create microsite files")
+  val micrositeSaveDependencies =
+    taskKey[File]("Saves all dependencies needed by the project to be later retrieved by Kazari")
   val micrositeConfig =
     taskKey[Unit]("Copy microsite config to the site folder")
   val micrositeName        = settingKey[String]("Microsite name")

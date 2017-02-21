@@ -52,9 +52,26 @@ class MicrositeHelper(config: MicrositeSettings) {
 
   def createResources(resourceManagedDir: File, tutSourceDirectory: File): List[File] = {
 
-    val targetDir: String    = getPathWithSlash(resourceManagedDir)
-    val tutSourceDir: String = getPathWithSlash(tutSourceDirectory)
-    val pluginURL: URL       = getClass.getProtectionDomain.getCodeSource.getLocation
+    val targetDir: String                   = getPathWithSlash(resourceManagedDir)
+    val tutSourceDir: String                = getPathWithSlash(tutSourceDirectory)
+    val pluginURL: URL                      = getClass.getProtectionDomain.getCodeSource.getLocation
+    val dependencies: Seq[KazariDependency] = loadDependenciesFromBuild(resourceManagedDir)
+    val configWithDependencies = config.copy(
+      config.identity,
+      config.visualSettings,
+      config.configYaml,
+      config.fileLocations,
+      config.urlSettings,
+      config.gitSettings,
+      KazariSettings(
+        config.micrositeKazariSettings.micrositeKazariEvaluatorUrl,
+        config.micrositeKazariSettings.micrositeKazariEvaluatorToken,
+        config.micrositeKazariSettings.micrositeKazariGithubToken,
+        config.micrositeKazariSettings.micrositeKazariCodeMirrorTheme,
+        (config.micrositeKazariSettings.micrositeKazariDependencies ++ dependencies).toSet.toSeq,
+        config.micrositeKazariSettings.micrositeKazariResolvers
+      )
+    )
 
     copyPluginResources(pluginURL, s"$targetDir$jekyllDir/", "_sass")
     copyPluginResources(pluginURL, s"$targetDir$jekyllDir/", "css")
@@ -93,7 +110,8 @@ class MicrositeHelper(config: MicrositeSettings) {
     }
 
     List(createConfigYML(targetDir), createPalette(targetDir)) ++
-      createLayouts(targetDir) ++ createPartialLayout(targetDir) ++ createFavicons(targetDir)
+      createLayouts(targetDir, configWithDependencies) ++ createPartialLayout(targetDir) ++ createFavicons(
+      targetDir)
   }
 
   def createConfigYML(targetDir: String): File = {
@@ -125,11 +143,11 @@ class MicrositeHelper(config: MicrositeSettings) {
     targetFile
   }
 
-  def createLayouts(targetDir: String): List[File] =
+  def createLayouts(targetDir: String, configSettings: MicrositeSettings = config): List[File] =
     List(
-      "home" -> new HomeLayout(config),
-      "docs" -> new DocsLayout(config),
-      "page" -> new PageLayout(config)
+      "home" -> new HomeLayout(configSettings),
+      "docs" -> new DocsLayout(configSettings),
+      "page" -> new PageLayout(configSettings)
     ) map {
       case (layoutName, layout) =>
         val targetFile =
@@ -178,4 +196,49 @@ class MicrositeHelper(config: MicrositeSettings) {
       .map(parent => sourceDir.*** pair relativeTo(parent))
       .getOrElse(sourceDir.*** pair basic)
   }
+
+  def kazariDependenciesFilename = "dependencies.txt"
+
+  def storeDependenciesFromBuild(modules: Seq[ModuleID],
+                                 targetDir: File,
+                                 scalaVersion: String): File = {
+    val targetPath = getPathWithSlash(targetDir)
+    val targetFile =
+      createFilePathIfNotExists(s"$targetPath/$kazariDependenciesFilename")
+    val scalaVersionSuffix = "_" + scalaVersion.split('.').dropRight(1).mkString(".")
+    val scalaDependencies = defaultScalaDependendencies(scalaVersion).map(dep =>
+      s"${dep.groupId};${dep.artifactId};${dep.version}")
+    val content =
+      (modules.map(m =>
+        if (m.name.contains("_2.10") || m.name.contains("_2.11") || m.name.contains("_2.12")) {
+          s"${m.organization};${m.name};${m.revision}"
+        } else {
+          s"${m.organization};${m.name}$scalaVersionSuffix;${m.revision}"
+      }) ++ scalaDependencies).mkString("\n")
+    IO.write(targetFile, content)
+    targetFile
+  }
+
+  def loadDependenciesFromBuild(targetDir: File): Seq[KazariDependency] = {
+    val targetPath = getPathWithSlash(targetDir)
+    val file       = new File(s"$targetPath/$kazariDependenciesFilename")
+    if (file.exists()) {
+      IO.read(file)
+        .split("\n")
+        .map(dep => dep.split(";"))
+        .filter(rawDep => rawDep.length == 3)
+        .map(rawDeps => KazariDependency(rawDeps(0), rawDeps(1), rawDeps(2)))
+        .toSeq ++ config.micrositeKazariSettings.micrositeKazariDependencies
+    } else {
+      Seq()
+    }
+  }
+
+  def defaultScalaDependendencies(scalaVersion: String) = Seq(
+    microsites.KazariDependency("org.scala-lang", "scala-library", scalaVersion),
+    microsites.KazariDependency("org.scala-lang", "scala-api", scalaVersion),
+    microsites.KazariDependency("org.scala-lang", "scala-reflect", scalaVersion),
+    microsites.KazariDependency("org.scala-lang", "scala-compiler", scalaVersion),
+    microsites.KazariDependency("org.scala-lang", "scala-xml", scalaVersion)
+  )
 }

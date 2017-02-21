@@ -51,6 +51,9 @@ object MicrositesPlugin extends AutoPlugin {
         tutTargetDirectory := resourceManaged.value / "main" / "jekyll"
       )
 
+  def defaultEvaluatorUrl211 = "https://scala-evaluator.herokuapp.com"
+  def defaultEvaluatorUrl212 = "https://scala-evaluator-212.herokuapp.com"
+
   lazy val micrositeDefaultSettings = Seq(
     micrositeName := name.value,
     micrositeDescription := description.value,
@@ -81,12 +84,13 @@ object MicrositesPlugin extends AutoPlugin {
     micrositeFavicons := Seq(),
     micrositeGithubOwner := "47deg",
     micrositeGithubRepo := "sbt-microsites",
-    micrositeKazariEvaluatorUrl := "https://scala-evaluator-212.herokuapp.com",
+    micrositeKazariEvaluatorUrl := kazariScalaEvaluatorUrl((scalaVersion in Compile).value),
     micrositeKazariEvaluatorToken := "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.S2F6YXJp.Jl2eqMfw8IakJF93PjxTbrf-8YUJgX5OoOfy5JHE8Yw",
     micrositeKazariGithubToken := "",
     micrositeKazariCodeMirrorTheme := "solarized-dark",
     micrositeKazariDependencies := Seq(),
-    micrositeKazariResolvers := Seq(),
+    micrositeKazariResolvers := ((resolvers in Compile).value
+      .flatMap(extractResolverUrl) ++ kazariDefaultResolvers).toSet.toSeq,
     micrositeGitHostingService := GitHub,
     micrositeGitHostingUrl := "",
     includeFilter in Jekyll := ("*.html" | "*.css" | "*.png" | "*.jpg" | "*.jpeg" | "*.gif" | "*.js" | "*.swf" | "*.md" | "*.webm" | "*.ico" | "CNAME"))
@@ -165,6 +169,10 @@ object MicrositesPlugin extends AutoPlugin {
   }
 
   lazy val micrositeTasksSettings = Seq(
+    micrositeSaveDependencies := micrositeHelper.value.storeDependenciesFromBuild(
+      modules = (allDependencies in Compile).value,
+      targetDir = (resourceManaged in Compile).value,
+      scalaVersion = (scalaVersion in Compile).value),
     microsite := micrositeHelper.value.createResources(resourceManagedDir =
                                                          (resourceManaged in Compile).value,
                                                        tutSourceDirectory =
@@ -173,6 +181,7 @@ object MicrositesPlugin extends AutoPlugin {
       .copyConfigurationFile((sourceDirectory in Jekyll).value, siteDirectory.value),
     makeMicrosite := Def
       .sequential(
+        micrositeSaveDependencies,
         microsite,
         tut,
         makeSite,
@@ -187,4 +196,25 @@ object MicrositesPlugin extends AutoPlugin {
       )
       .value
   )
+
+  def moduleToKazariDependency(module: ModuleID): KazariDependency =
+    KazariDependency(module.organization, module.name, module.revision)
+
+  def kazariScalaEvaluatorUrl(scalaVersion: String) =
+    if (scalaVersion.contains("2.12")) {
+      defaultEvaluatorUrl212
+    } else {
+      defaultEvaluatorUrl211
+    }
+
+  def kazariDefaultResolvers = Seq(
+    "https://oss.sonatype.org/content/repositories/snapshots",
+    "http://repo1.maven.org/maven2",
+    "https://oss.sonatype.org/content/repositories/public"
+  )
+
+  def extractResolverUrl(resolver: Resolver): Option[String] = resolver match {
+    case m: MavenRepository => Some(m.root)
+    case _                  => None
+  }
 }
