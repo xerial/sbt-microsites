@@ -4,8 +4,12 @@ scala:
 jdk:
 - oraclejdk8
 before_install:
-- if [ "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false" ]; then bash
-  scripts/decrypt-keys.sh; fi
+- if [ "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false" ]; then
+    openssl aes-256-cbc -K $encrypted_0d40c3508e9d_key -iv $encrypted_0d40c3508e9d_iv -in keys.tar.enc -out keys.tar -d;
+    tar xvf keys.tar;
+    chmod 600 deploy_key;
+    cp deploy_key ~/.ssh/id_rsa;
+  fi
 - export PATH=${PATH}:./vendor/bundle
 install:
 - rvm use 2.2.3 --install --fuzzy
@@ -18,6 +22,8 @@ script:
 - sbt kazari/fullOptGenerate
 - sbt docs/tut
 after_success:
-- if [ "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false" ]; then bash
-  scripts/kazariBuild.sh; bash scripts/publishMicrosite.sh; fi
-- sbt orgAfterCISuccess
+- if [ "$TRAVIS_BRANCH" = "master" -a "$TRAVIS_PULL_REQUEST" = "false" ]; then
+    bash scripts/kazariBuild.sh;
+    bash scripts/publishMicrosite.sh;
+  fi
+- sbt ++$TRAVIS_SCALA_VERSION orgAfterCISuccess
